@@ -6,6 +6,7 @@
     -Christopher Welborn 08-15-2014
 """
 
+from collections import OrderedDict
 from datetime import datetime
 from docopt import docopt
 import os
@@ -35,10 +36,14 @@ SCRIPTDIR = os.path.abspath(sys.path[0])
 USAGESTR = """{versionstr}
     Usage:
         {script} -h | -v
+        {script} -c OUTPUTFILE
         {script} WORD
 
     Options:
+        OUTPUTFILE    : File name for conversions.
         WORD          : Word to search for.
+        -c,--convert  : Convert dictionary file to an sqlite3 database.
+                        (Experimental!)
         -h,--help     : Show this help message.
         -v,--version  : Show version.
 """.format(script=SCRIPT, versionstr=VERSIONSTR)
@@ -50,6 +55,18 @@ def main(argd):
     """ Main entry point, expects doctopt arg dict as argd """
     if not os.path.exists(DICTFILE):
         print_fail('Missing dictionary file: {}'.format(DICTFILE))
+    if argd['--convert']:
+        print('Converting file: {}'.format(DICTFILE))
+        outfile = argd['OUTPUTFILE']
+        if outfile == '-':
+            outfile = 'dictionary.txt'
+        if not confirm_file(outfile):
+            print('\nUser cancelled.\n')
+            return 1
+
+        convert_dict(outfile)
+        print('\nFinished with the conversion: {}'.format(outfile))
+        return 1
 
     word = argd['WORD']
     print_status('Searching for:', value=word)
@@ -76,6 +93,45 @@ def main(argd):
 colorword = lambda s: color(s, fore='green', style='bold')
 colordef = lambda s: color(s, fore='blue')
 colorlist = lambda s: color(s, fore='grey')
+
+
+def confirm(question):
+    """ Confirm an action by asking the user a question. """
+    question = '\n{} (y/N): '.format(question)
+    answer = input(question).lower().strip()
+    return answer and answer[0] == 'y'
+
+
+def confirm_file(filename):
+    """ Confirm the user wants to overwrite a file.
+        If the file doesn't exist, True is returned.
+        Returns False if the user doesn't want to overwrite the file.
+    """
+    if not os.path.exists(filename):
+        return True
+    return confirm('This file exists: {}\n\nOverwrite it?'.format(filename))
+
+
+def convert_dict(outputfile):
+    """ Convert the dictionary of words/defs into an sqlite3 database. """
+    # Not actually creating an SqLite database. Just testing things out.
+    with open(DICTFILE, 'r') as fin:
+        with open(outputfile, 'w') as fout:
+            for word, defs in dict_words(fin).items():
+                fout.write('{}\n'.format(word))
+                fout.write('\n----\n'.join(defs))
+                fout.write('\n---------------------------\n')
+
+
+def dict_words(fileobj):
+    """ Iterate over the entire file, and produce a dict of {word: [defs,]} """
+    defs = OrderedDict()
+    for word, definition in iter_definitions(fileobj):
+        if defs.get(word, None):
+            defs[word].append(definition)
+        else:
+            defs[word] = [definition]
+    return defs
 
 
 def find_word(word):
@@ -158,6 +214,9 @@ def get_suggestions(word):
     """ Get spelling suggestions for a word,
         only if SpellChecker is properly initialized.
 
+        Warning:
+            This sometimes suggests words that aren't in the definitions file.
+
         Returns a list of suggestions, or None  on failure.
     """
     if spellchecker:
@@ -169,6 +228,64 @@ def get_suggestions(word):
             if results:
                 return results[word]
     return None
+
+
+def iter_definitions(f):
+    """ Iterate over the entire file, yielding ('word', 'definition').
+        This is not for searching.
+        Arguments:
+            f  : An open file object, for the dictionary file.
+    """
+    # This is what the words look like in the file.
+    wordpat = re.compile('^[A-Z\-]+$')
+    # This is what the numbered list of defs look like.
+    listpat = re.compile('^[1-9]{1,3}\.')
+    # Start of a definition
+    defstart = 'Defn: '
+    defstartlen = len(defstart)
+    trimdefstart = lambda s: s[defstartlen:]
+    formatdefstart = lambda s: ''.join(('\n', trimdefstart(s)))
+    # Place holder for results.
+    currentword = None
+    deflines = None
+
+    formatted_defs = lambda: '\n'.join(deflines).strip()
+
+    for line in f:
+        l = line.strip()
+        if not l:
+            # Blank line
+            continue
+        if l.startswith(('*** END', 'End of Project')):
+            # End of definitions.
+            raise StopIteration('End of definitions.')
+
+        if wordpat.match(l):
+            if deflines and (deflines is not None):
+                # This is the next word.
+                yield currentword, formatted_defs()
+            # Start of a word.
+            currentword = l
+            deflines = []
+        else:
+            if deflines is None:
+                # Skip the header
+                continue
+            # This is part of a definition.
+            # If we have already added some lines,
+            # this is part of the current word's definition.
+            if listpat.match(l):
+                deflines.append('\n{}'.format(l))
+            else:
+                if l.startswith(defstart):
+                    # Beginning of definition.
+                    deflines.append(formatdefstart(l))
+                else:
+                    # Rest of the def.
+                    deflines.append(l)
+    # The last word in the file.
+    if deflines:
+        yield currentword, formatted_defs()
 
 
 def print_error(msg):
