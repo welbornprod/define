@@ -11,6 +11,7 @@ from datetime import datetime
 from docopt import docopt
 import os
 import re
+import sqlite3
 import sys
 
 # Try importing the spell-check helper.
@@ -49,30 +50,32 @@ USAGESTR = """{versionstr}
 """.format(script=SCRIPT, versionstr=VERSIONSTR)
 
 DICTFILE = os.path.join(SCRIPTDIR, 'websters_dict_plain.txt')
+DICTDB = os.path.join(SCRIPTDIR, 'websters_dict_plain.sqlite3')
 
 
 def main(argd):
     """ Main entry point, expects doctopt arg dict as argd """
-    if not os.path.exists(DICTFILE):
-        print_fail('Missing dictionary file: {}'.format(DICTFILE))
+
     if argd['--convert']:
         print('Converting file: {}'.format(DICTFILE))
         outfile = argd['OUTPUTFILE']
         if outfile == '-':
-            outfile = 'dictionary.txt'
+            outfile = DICTDB
         if not confirm_file(outfile):
             print('\nUser cancelled.\n')
             return 1
 
-        convert_dict(outfile)
+        convert_sqlite(outfile)
         print('\nFinished with the conversion: {}'.format(outfile))
         return 1
 
     word = argd['WORD']
     print_status('Searching for:', value=word)
+
     starttime = datetime.now()
     definition = find_word(word)
     duration = (datetime.now() - starttime)
+
     if definition:
         print(''.join(('\n', definition)))
         timestr = '{:.3f}'.format(duration.total_seconds())
@@ -112,15 +115,51 @@ def confirm_file(filename):
     return confirm('This file exists: {}\n\nOverwrite it?'.format(filename))
 
 
-def convert_dict(outputfile):
-    """ Convert the dictionary of words/defs into an sqlite3 database. """
-    # Not actually creating an SqLite database. Just testing things out.
+def convert_pickle(outputfile):
+    """ Convert the dictionary to an OrderedDict, and then pickle it. """
+    import pickle
     with open(DICTFILE, 'r') as fin:
-        with open(outputfile, 'w') as fout:
-            for word, defs in dict_words(fin).items():
-                fout.write('{}\n'.format(word))
-                fout.write('\n----\n'.join(defs))
-                fout.write('\n---------------------------\n')
+        with open(outputfile, 'wb') as fout:
+            fout.write(pickle.dumps(dict_words(fin)))
+
+
+def convert_sqlite(outputfile):
+    """ Convert the dictionary to an SQLite database. """
+    con = create_sqlite_db(outputfile)
+    cursor = con.cursor()
+    with open(DICTFILE, 'r') as fin:
+        for word, defs in dict_words(fin).items():
+            insert_into_sqlite_db(cursor, word, defs)
+    con.commit()
+    con.close()
+
+
+def create_sqlite_db(outputfile):
+    """ Create an empty database to work with, and returns the connection. """
+    try:
+        os.remove(outputfile)
+    except EnvironmentError:
+        pass
+
+    con = sqlite3.connect(outputfile)
+    cur = con.cursor()
+
+    cur.execute(''.join((
+        'CREATE TABLE words (',
+        'id INTEGER PRIMARY KEY,'
+        'word TEXT',
+        ');'
+    )))
+    con.commit()
+    cur.execute(''.join((
+        'CREATE TABLE definitions (',
+        'word_id REFERENCES words(id),'
+        'text TEXT',
+        ');'
+    )))
+    con.commit()
+
+    return con
 
 
 def dict_words(fileobj):
@@ -140,11 +179,39 @@ def find_word(word):
         If no word is found, '' is returned.
         If the word is found, the definition is returned as str.
     """
+    # Try the database first.
+    if os.path.exists(DICTDB):
+        try:
+            con = sqlite3.connect(DICTDB)
+        except EnvironmentError as esqlite:
+            print_error(
+                'Unable to open the database: {}'.format(DICTDB, exc=exsqlite))
+            print('\nFalling back to the plain text file.')
+        else:
+            cursor = con.cursor()
+            try:
+                results = find_word_indb(con.cursor(), word)
+            except sqlite3.OperationalError:
+                print('\nFalling back to the plain text file.')
+            else:
+                return results
+    else:
+        print('\nNo database file present, falling back to text.')
+
+    # DB Failed, try the old fashioned method.
     try:
         with open(DICTFILE, 'r') as f:
             return find_word_infile(f, word)
     except EnvironmentError as ex:
-        print_fail('Error opening dict file: {}'.format(FILENAME), exc=ex)
+        print_fail('Error opening dict file: {}'.format(DICTFILE), exc=ex)
+
+
+def find_word_indb(cursor, word):
+    rows = cursor.execute(''.join((
+        'SELECT text FROM definitions JOIN words ',
+        'WHERE words.word=? and words.id == definitions.word_id;'
+    )), (word.upper(),)).fetchall()
+    return format_db_results(word, [r[0] for r in rows])
 
 
 def find_word_infile(f, word):
@@ -210,6 +277,21 @@ def find_word_infile(f, word):
     return formatted_defs()
 
 
+def format_db_results(word, results):
+    """ Colors a definition list retrieved from the database. """
+    listpat = re.compile('^[1-9]{1,3}\.')
+    formatted = []
+    for deftext in results:
+        # Putting the word here matches plain text results.
+        formatted.append('\n{}'.format(colorword(word.upper())))
+        for line in deftext.split('\n'):
+            if listpat.match(line):
+                formatted.append(colorlist(line))
+            else:
+                formatted.append(colordef(line))
+    return '\n'.join(formatted)
+
+
 def get_suggestions(word):
     """ Get spelling suggestions for a word,
         only if SpellChecker is properly initialized.
@@ -228,6 +310,28 @@ def get_suggestions(word):
             if results:
                 return results[word]
     return None
+
+
+def insert_into_sqlite_db(cursor, word, definitions):
+    """ Inserts a word and definitions into an sqlite3 database.
+        Arguments:
+            cursor      : SQLite cursor, with tables set up already.
+                          see: create_sqlite_db()
+            word        : Word to insert.
+            definitions : Iterable of definitions for the word.
+    """
+    cursor.execute('INSERT INTO words(word) values (?);', (word,))
+    rowid = cursor.execute('SELECT max(id) from words;').fetchone()[0]
+    if not rowid:
+        print('Error! Rowid not set properly!: {}'.format(rowid))
+        sys.exit(1)
+
+    for definition in definitions:
+        cursor.execute(''.join((
+            'INSERT INTO definitions(word_id, text) ',
+            'values (?, ?);'
+        )), (rowid, definition))
+        print('Set def for word_id: {}'.format(rowid))
 
 
 def iter_definitions(f):
