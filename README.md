@@ -21,15 +21,13 @@ Requirements:
 
 Usage:
 --------
-###Example:
+**Example:** 
 
-```
-./define.py apple
-```
+`./define.py apple`
 
-###Options:
+**Options**:
 
-```
+```help
     Usage:
         define -h | -v
         define WORD
@@ -41,7 +39,7 @@ Usage:
 ```
 
 spell.py
----------
+--------
 
 This also includes a small spell-check utility that uses ASpell to provide
 spelling suggestions.
@@ -50,14 +48,14 @@ tool for checking your spelling.
 
  `define.py` will use this to provide spelling suggestions when available.
 
-###Example:
+**Example:**
 
-```
-./spell.py thiz
-````
+`./spell.py thiz`
 
-###Options:
-```
+
+**Options:**
+
+```help
     Usage:
         spell -h | -v
         spell WORD... [-i] [-D]
