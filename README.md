@@ -9,9 +9,7 @@ database if available, and then the plain text file.
 I recommend creating a symlink in `/usr/bin`, `~/.local/bin`, or some other
 place in your `$PATH` like this:
 
-```
-ln -s /path/to/define.py ~/.local/bin/define
-```
+`ln -s /path/to/define.py ~/.local/bin/define`
 
 Requirements:
 -------------
@@ -23,7 +21,7 @@ Usage:
 --------
 **Example:** 
 
-`./define.py apple`
+`define apple`
 
 **Options**:
 
@@ -50,8 +48,27 @@ tool for checking your spelling.
 
 **Example:**
 
-`./spell.py thiz`
+`spell pythin`
 
+**Example Output:**
+
+```
+pythin:
+    Python    python    pythons   Putin     thin      Pythias   Petain    
+    within    Python's  plaything python's  thine     thing     PIN       
+    patching  pin       pitching  patina    patine    potion    pain      
+    path      pith      than      then      Scythian  scything  Parthia   
+    pithier   pithy    
+```
+
+When you spell the word correctly, is it repeated back to you. If the word is unknown a warning is emitted:
+
+```
+spell supercalifragilistic
+
+supercalifragilistic:
+    <not found> 
+```
 
 **Options:**
 
