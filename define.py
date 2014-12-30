@@ -17,15 +17,17 @@ import sys
 # Try importing the spell-check helper.
 # This only works if ASpell is installed, and the spell.py module is available.
 try:
-    from spell import SpellChecker
+    import spell
 except ImportError:
     # Spell checking will not be available. :(
+    spell = None
     spellchecker = None
 else:
     try:
-        spellchecker = SpellChecker()
-    except SpellChecker.NotSupported:
+        spellchecker = spell.SpellChecker()
+    except spell.SpellChecker.NotSupported:
         # ASpell is not available.
+        spell = None
         spellchecker = None
 
 NAME = 'Define'
@@ -176,18 +178,19 @@ def find_definition(word, _attempts=0, _starttime=None):
         if otherwords:
             # The word may have been misspelled.
             print_status('Can\'t find:', value=word)
-            suggestvals = ' '.join(otherwords)
-            print_status('Did you mean one of these?:', value=suggestvals)
+            # suggestvals = ' '.join(otherwords)
+            print_status('Did you mean one of these?:')
+            spell.print_corrections(otherwords)
             return 1
 
     # Can't find alternative spellings,
-    # Try shorter words, like 'slay' instead of 'slayed' where applicable.
+    # Try the root word, like 'slay' instead of 'slayed' where applicable.
     # This is setup to try only one more time after the initial attempt.
     if _attempts < 2:
         tryword = None
         if word.endswith(('ed', 'er', 'es')):
             tryword = word[:-2]
-        elif word.endswith('ing'):
+        elif word.endswith(('ing', 'ify', 'ize')):
             tryword = word[:-3]
         if tryword:
             print_status('Trying', tryword, 'instead...')
@@ -331,7 +334,7 @@ def get_suggestions(word):
     if spellchecker:
         try:
             results = spellchecker.check_word(word)
-        except SpellChecker.ASpellError:
+        except spell.SpellChecker.ASpellError:
             return None
         else:
             if results:

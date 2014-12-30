@@ -16,7 +16,7 @@ import subprocess
 import sys
 
 NAME = 'Spell'
-VERSION = '0.0.3'
+VERSION = '0.0.3-1'
 VERSIONSTR = '{} v. {}'.format(NAME, VERSION)
 SCRIPTDIR, SCRIPT = os.path.split(os.path.abspath(sys.argv[0]))
 
@@ -81,19 +81,24 @@ def format_group(grp, longest):
     return '    {}'.format(''.join(formatted))
 
 
+def print_corrections(corrected):
+    """ Prints word corrections in a colored block. """
+    # Get longest correction, for formatting. (with room for a space)
+    longest = len(max(corrected, key=len)) + 1
+    # Make the rows fit within 80 chars (with a 4 space indent.)
+    rowcnt = 76 // longest
+    for i in range(0, len(corrected), rowcnt):
+        correctgrp = (s for s in corrected[i:i + rowcnt])
+        print(format_group(correctgrp, longest))
+
+
 def print_wordresults(parsed, hidecorrect=False):
-    """ Print color-coded word corrections. """
+    """ Print color-coded word corrections for all words. """
     for word, corrected in parsed.items():
         if corrected:
             wordcolor = color(word, fore='red', style='bold')
             print(''.join(('\n', wordcolor, ':')))
-            # Get longest correction, for formatting. (with room for a space)
-            longest = len(max(corrected, key=len)) + 1
-            # Make the rows fit within 80 chars (with a 4 space indent.)
-            rowcnt = 76 // longest
-            for i in range(0, len(corrected), rowcnt):
-                correctgrp = (s for s in corrected[i:i + rowcnt])
-                print(format_group(correctgrp, longest))
+            print_corrections(corrected)
         elif not hidecorrect:
             print(color(word, fore='green'))
 
