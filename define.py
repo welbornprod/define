@@ -29,7 +29,7 @@ else:
         spellchecker = None
 
 NAME = 'Define'
-VERSION = '0.0.2'
+VERSION = '0.0.2-1'
 VERSIONSTR = '{} v. {}'.format(NAME, VERSION)
 SCRIPT = os.path.split(os.path.abspath(sys.argv[0]))[1]
 SCRIPTDIR = os.path.abspath(sys.path[0])
@@ -72,25 +72,8 @@ def main(argd):
     word = argd['WORD']
     print_status('Searching for:', value=word)
 
-    starttime = datetime.now()
-    definition = find_word(word)
-    duration = (datetime.now() - starttime)
+    return find_definition(word)
 
-    if definition:
-        print(''.join(('\n', definition)))
-        timestr = '{:.3f}'.format(duration.total_seconds())
-        print_status('\nTime:', value=timestr)
-    else:
-        otherwords = get_suggestions(word)
-        if otherwords:
-            print_status('Can\'t find:', value=word)
-            suggestvals = ' '.join(otherwords)
-            print_status('Did you mean one of these?:', value=suggestvals)
-            return 1
-        else:
-            print_fail('Can\'t find: {}'.format(word))
-
-    return 0
 
 # Color-coding for definitions.
 colorword = lambda s: color(s, fore='green', style='bold')
@@ -173,6 +156,51 @@ def dict_words(fileobj):
     return defs
 
 
+def find_definition(word, _attempts=0, _starttime=None):
+    """ Trys to find the definition for a word. If it can't find it, it will
+        check for misspelled words.
+    """
+    if _starttime is None:
+        _starttime = datetime.now()
+    definition = find_word(word)
+    duration = (datetime.now() - _starttime)
+    if definition:
+        print(''.join(('\n', definition)))
+        timestr = '{:.3f}'.format(duration.total_seconds())
+        print_status('\nTime:', value=timestr)
+        return 0
+
+    # See if the word is misspelled.
+    if _attempts == 0:
+        otherwords = get_suggestions(word)
+        if otherwords:
+            # The word may have been misspelled.
+            print_status('Can\'t find:', value=word)
+            suggestvals = ' '.join(otherwords)
+            print_status('Did you mean one of these?:', value=suggestvals)
+            return 1
+
+    # Can't find alternative spellings,
+    # Try shorter words, like 'slay' instead of 'slayed' where applicable.
+    # This is setup to try only one more time after the initial attempt.
+    if _attempts < 2:
+        tryword = None
+        if word.endswith(('ed', 'er', 'es')):
+            tryword = word[:-2]
+        elif word.endswith('ing'):
+            tryword = word[:-3]
+        if tryword:
+            print_status('Trying', tryword, 'instead...')
+            return find_definition(
+                tryword,
+                _attempts=_attempts + 1,
+                _starttime=_starttime)
+    else:
+        print_status('Too many attempts,', 'giving up.')
+    print_status('Can\'t find:', value=word)
+    return 1
+
+
 def find_word(word):
     """ Opens the plain text dictionary file and searches for a word
         and definition.
@@ -183,12 +211,11 @@ def find_word(word):
     if os.path.exists(DICTDB):
         try:
             con = sqlite3.connect(DICTDB)
-        except EnvironmentError as esqlite:
+        except EnvironmentError as exsqlite:
             print_error(
                 'Unable to open the database: {}'.format(DICTDB, exc=exsqlite))
             print('\nFalling back to the plain text file.')
         else:
-            cursor = con.cursor()
             try:
                 results = find_word_indb(con.cursor(), word)
             except sqlite3.OperationalError:
@@ -411,7 +438,7 @@ def print_fail(msg, exc=None, retcode=1):
     sys.exit(retcode)
 
 
-def print_status(lblormsg, value=None):
+def print_status(lblormsg, value=None, endmsg=None):
     """ Print a colored status message.
         If no 'value' is passed, print a simple colored message.
         If 'value' is passed, print a label: value type message with colors.
@@ -420,6 +447,8 @@ def print_status(lblormsg, value=None):
     msg = color(str(lblormsg), fore='green')
     if value:
         msg = ' '.join((msg, color(str(value), fore='blue', style='bold')))
+    if endmsg:
+        msg = ' '.join((msg, color(str(endmsg), fore='green')))
     print(msg)
 
 
