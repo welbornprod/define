@@ -40,11 +40,11 @@ USAGESTR = """{versionstr}
     Usage:
         {script} -h | -v
         {script} -c OUTPUTFILE
-        {script} WORD
+        {script} WORD...
 
     Options:
         OUTPUTFILE    : File name for conversions.
-        WORD          : Word to search for.
+        WORD          : Word or words to search for.
         -c,--convert  : Convert dictionary file to an sqlite3 database.
                         (Experimental!)
         -h,--help     : Show this help message.
@@ -71,11 +71,13 @@ def main(argd):
         print('\nFinished with the conversion: {}'.format(outfile))
         return 1
 
-    word = argd['WORD']
-    print_status('Searching for:', value=word)
-
-    return find_definition(word)
-
+    ret = 0
+    for word in argd['WORD']:
+        print_status('Searching for:', value=word)
+        lastret = find_definition(word)
+        # Exit code shows how many errors there were.
+        ret += lastret
+    return ret
 
 # Color-coding for definitions.
 colorword = lambda s: color(s, fore='green', style='bold')
@@ -158,12 +160,14 @@ def dict_words(fileobj):
     return defs
 
 
-def find_definition(word, _attempts=0, _starttime=None):
+def find_definition(word, _attempts=0, _starttime=None, _origword=None):
     """ Trys to find the definition for a word. If it can't find it, it will
         check for misspelled words.
     """
     if _starttime is None:
         _starttime = datetime.now()
+    if _origword is None:
+        _origword = word
     definition = find_word(word)
     duration = (datetime.now() - _starttime)
     if definition:
@@ -197,10 +201,11 @@ def find_definition(word, _attempts=0, _starttime=None):
             return find_definition(
                 tryword,
                 _attempts=_attempts + 1,
-                _starttime=_starttime)
+                _starttime=_starttime,
+                _origword=_origword)
     else:
         print_status('Too many attempts,', 'giving up.')
-    print_status('Can\'t find:', value=word)
+    print_status('Can\'t find:', value=_origword)
     return 1
 
 
