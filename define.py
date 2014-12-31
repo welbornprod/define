@@ -10,6 +10,7 @@ from collections import OrderedDict
 from datetime import datetime
 from docopt import docopt
 import os
+import platform
 import re
 import sqlite3
 import sys
@@ -35,7 +36,7 @@ VERSION = '0.0.2-1'
 VERSIONSTR = '{} v. {}'.format(NAME, VERSION)
 SCRIPT = os.path.split(os.path.abspath(sys.argv[0]))[1]
 SCRIPTDIR = os.path.abspath(sys.path[0])
-
+OS = platform.system().lower()
 USAGESTR = """{versionstr}
     Usage:
         {script} -h | -v
@@ -80,9 +81,12 @@ def main(argd):
     return ret
 
 # Color-coding for definitions.
-colorword = lambda s: color(s, fore='green', style='bold')
-colordef = lambda s: color(s, fore='blue')
-colorlist = lambda s: color(s, fore='grey')
+if OS.startswith('win'):
+    colorword = colordef = colorlist = lambda s: s
+else:
+    colorword = lambda s: color(s, fore='green', style='bold')
+    colordef = lambda s: color(s, fore='blue')
+    colorlist = lambda s: color(s, fore='grey')
 
 
 def confirm(question):
@@ -650,9 +654,16 @@ class ColorCodes(object):
         colored = self.word(text=text, **kwargs)
         return '{}{}'.format(spacing, colored)
 
-# Alias, convenience function for ColorCodes().
-colorize = ColorCodes()
-color = colorize.colorword
+# Colorizer aliases (if supported)
+if OS.startswith('win'):
+    # No windows color support, yet.
+    colorize = None
+    def color(text=None, fore=None, back=None, style=None):
+        return text
+else:
+    # Alias, convenience function for ColorCodes().    
+    colorize = ColorCodes()
+    color = colorize.colorword
 
 if __name__ == '__main__':
     mainret = main(docopt(USAGESTR, version=VERSIONSTR))
