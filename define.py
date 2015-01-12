@@ -15,6 +15,7 @@ import re
 import sqlite3
 import sys
 
+
 # Try importing the spell-check helper.
 # This only works if ASpell is installed, and the spell.py module is available.
 try:
@@ -82,6 +83,7 @@ def main(argd):
 
 # Color-coding for definitions.
 if OS.startswith('win'):
+    # No support for Windows, yet.
     colorword = colordef = colorlist = lambda s: s
 else:
     colorword = lambda s: color(s, fore='green', style='bold')
@@ -469,7 +471,12 @@ class ColorCodes(object):
     """ This class colorizes text for an ansi terminal.
         Inspired by Colorama (though very different)
     """
+    # TODO: Update to colorize.ColorCodes 1.0.2 (with windows support)
+    __version__ = '1.0.1-0'
+
     class Invalid256Color(ValueError):
+
+        """ Just provides a better name than ValueError for bad 256 codes. """
         pass
 
     def __init__(self):
@@ -658,10 +665,11 @@ class ColorCodes(object):
 if OS.startswith('win'):
     # No windows color support, yet.
     colorize = None
+
     def color(text=None, fore=None, back=None, style=None):
         return text
 else:
-    # Alias, convenience function for ColorCodes().    
+    # Alias, convenience function for ColorCodes().
     colorize = ColorCodes()
     color = colorize.colorword
 
