@@ -58,7 +58,7 @@ DICTDB = os.path.join(SCRIPTDIR, 'websters_dict_plain.sqlite3')
 
 
 def main(argd):
-    """ Main entry point, expects doctopt arg dict as argd """
+    """ Main entry point, expects docopt arg dict as argd """
 
     if argd['--convert']:
         print('Converting file: {}'.format(DICTFILE))

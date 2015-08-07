@@ -16,27 +16,27 @@ import subprocess
 import sys
 
 NAME = 'Spell'
-VERSION = '0.0.3-1'
+VERSION = '0.1.0'
 VERSIONSTR = '{} v. {}'.format(NAME, VERSION)
 SCRIPTDIR, SCRIPT = os.path.split(os.path.abspath(sys.argv[0]))
 
 USAGESTR = """{versionstr}
     Usage:
         {script} -h | -v
-        {script} WORD... [-i] [-D]
-        {script} -s [-i] [-D]
+        {script} [WORD...] [-i] [-D]
+        {script} -c file
 
     Options:
-        WORD            : One or many words to spell check.
-                          You can also just pass them as a single string.
-        -D,--debug      : Shows more debugging info.
-        -h,--help       : Show this help message.
-        -i,--incorrect  : Only show the incorrect words.
-        -s,--stdin      : Use stdin to read words from.
-                          Ex: echo "test" | {script}
-        -v,--version    : Show version.
+        WORD                  : One or many words to spell check.
+                                You can also just pass them as a single string.
+        -c file,--check file  : Use the interactive aspell file checker.
+        -D,--debug            : Shows more debugging info.
+        -h,--help             : Show this help message.
+        -i,--incorrect        : Only show the incorrect words.
+        -v,--version          : Show version.
 
-    The return code is the number of misspelled words overall.
+    The return code is the number of misspelled words overall when not using
+    the interactive file checker.
     Aspell has a large vocabulary, but it isn't perfect.
     This script will tell you if the word you are checking can't be found.
 """.format(script=SCRIPT, versionstr=VERSIONSTR)
@@ -56,9 +56,21 @@ def main(argd):
         print('\nError:\n{}\n'.format(ex))
         return 1
 
+    if argd['--check']:
+        # Interactive file checker
+        try:
+            ret = spellcheck.check_file(argd['--check'])
+        except Exception as ex:
+            print('\nError, {}'.format(ex))
+            ret = 1
+        return ret
+
     if argd['WORD']:
         words = argd['WORD']
-    elif argd['--stdin']:
+    else:
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            # Helpful, for new users.
+            print('\nReading from stdin until EOF (Ctrl + D)...\n')
         words = sys.stdin.read().split()
 
     allresults = {}
@@ -130,6 +142,18 @@ class SpellChecker(object):
             if ASpell can't be found.
         """
         self.aspell_exe = self.which_aspell()
+
+    def check_file(self, filename):
+        """ Run aspell on a file (The same as `aspell -c filename`)
+            Expects interactive input and output.
+        """
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            raise SpellChecker.ASpellError('\nExpecting interactive mode.')
+        if not os.path.isfile(filename):
+            raise FileNotFoundError('File not found: {}'.format(filename))
+
+        aspellexe = self.aspell_exe or self.which_aspell()
+        return subprocess.call([aspellexe, '-c', filename])
 
     def check_word(self, s):
         """ Check a string/word for correctness.
