@@ -17,7 +17,7 @@ import sys
 
 
 # Try importing the spell-check helper.
-# This only works if ASpell is installed, and the spell.py module is available.
+# This only works if ASpell is installed, and spell.py is available.
 try:
     import spell
 except ImportError:
@@ -33,7 +33,7 @@ else:
         spellchecker = None
 
 NAME = 'Define'
-VERSION = '0.0.2-1'
+VERSION = '0.0.3'
 VERSIONSTR = '{} v. {}'.format(NAME, VERSION)
 SCRIPT = os.path.split(os.path.abspath(sys.argv[0]))[1]
 SCRIPTDIR = os.path.abspath(sys.path[0])
@@ -248,6 +248,18 @@ def find_word(word):
 
 
 def find_word_indb(cursor, word):
+    """ Make SQLite3 do the actual finding.
+        Given a connection cursor to the DICTDB database, and a string (word),
+        execute a joined select to find a word in the database and the
+        definition that references that word.
+
+        Arguments:
+            cursor  : sqlite3 connection cursor (sqlite3.connect(DICTDB)).
+            word    : word to find ('myword').
+
+        Returns a color-formatted string on success, empty str on failure.
+    """
+
     rows = cursor.execute(''.join((
         'SELECT text FROM definitions JOIN words ',
         'WHERE words.word=? and words.id == definitions.word_id;'
@@ -403,7 +415,7 @@ def iter_definitions(f):
             continue
         if l.startswith(('*** END', 'End of Project')):
             # End of definitions.
-            raise StopIteration('End of definitions.')
+            return
 
         if wordpat.match(l):
             if deflines and (deflines is not None):
