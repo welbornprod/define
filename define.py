@@ -48,7 +48,6 @@ USAGESTR = """{versionstr}
         OUTPUTFILE    : File name for conversions.
         WORD          : Word or words to search for.
         -c,--convert  : Convert dictionary file to an sqlite3 database.
-                        (Experimental!)
         -h,--help     : Show this help message.
         -v,--version  : Show version.
 """.format(script=SCRIPT, versionstr=VERSIONSTR)
@@ -80,6 +79,7 @@ def main(argd):
         # Exit code shows how many errors there were.
         ret += lastret
     return ret
+
 
 # Color-coding for definitions.
 if OS.startswith('win'):
